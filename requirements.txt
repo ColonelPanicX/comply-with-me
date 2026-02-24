@@ -1,6 +1,7 @@
-requests
-beautifulsoup4
-playwright
-pandas
-openpyxl
-rich
+typer>=0.12
+requests>=2.31
+beautifulsoup4>=4.12
+playwright>=1.44
+pandas>=2.0
+openpyxl>=3.1
+rich>=13.0

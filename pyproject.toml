@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "comply-with-me"
+version = "0.2.0"
+description = "CLI tool for downloading and syncing compliance framework documentation"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "typer>=0.12",
+    "requests>=2.31",
+    "beautifulsoup4>=4.12",
+    "playwright>=1.44",
+    "pandas>=2.0",
+    "openpyxl>=3.1",
+    "rich>=13.0",
+]
+
+[project.scripts]
+cwm = "comply_with_me.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["comply_with_me*"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
