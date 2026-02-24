@@ -1,0 +1,65 @@
+# ── Data directories (local only — not for distribution) ──────────────────────
+source-content/
+normalized-content/
+docs/
+
+# Per-downloader generated output (runtime state, not code)
+scripts/*/reports/
+scripts/*/downloads/
+scripts/nist-auto-dl/reports/
+
+# ── AI Agent Directories ───────────────────────────────────────────────────────
+.claude/
+.codex/
+.gemini/
+
+# AI Agent Instruction Files (generated per-machine)
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+CODEX.md
+
+# Collaboration Workspace (internal AI artifacts — not for version control)
+.collab/
+
+# OS Files
+.DS_Store
+Thumbs.db
+*Zone.Identifier*
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local environment secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Python (common even in mixed repos)
+__pycache__/
+*.py[cod]
+
+# Node (very common even in non-node repos due to tooling)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python tooling
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
