@@ -6,9 +6,12 @@ import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import requests
+
+if TYPE_CHECKING:
+    from comply_with_me.state import StateFile
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -46,10 +49,17 @@ def download_file(
     *,
     force: bool = False,
     referer: Optional[str] = None,
+    state: Optional["StateFile"] = None,
 ) -> tuple[bool, str]:
     """Download url to dest. Returns (success, message)."""
-    if dest.exists() and dest.stat().st_size > 0 and not force:
-        return True, "skipped"
+    if not force:
+        if state is not None:
+            if state.needs_adopt(dest):
+                state.adopt(dest, url)
+            if state.is_fresh(dest, url):
+                return True, "skipped"
+        elif dest.exists() and dest.stat().st_size > 0:
+            return True, "skipped"
 
     headers: dict[str, str] = {"User-Agent": USER_AGENT}
     if referer:
@@ -69,6 +79,8 @@ def download_file(
                     if dest.stat().st_size == 0:
                         dest.unlink(missing_ok=True)
                         raise OSError("Empty file after download")
+                    if state is not None:
+                        state.record(dest, url)
                     return True, "downloaded"
                 if resp.status_code == 404:
                     return False, "not found (404)"

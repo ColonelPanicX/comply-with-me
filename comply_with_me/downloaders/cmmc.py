@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING, Optional
 from urllib.parse import urljoin, urlparse
 
 import requests
+
+if TYPE_CHECKING:
+    from comply_with_me.state import StateFile
 
 from .base import (
     RATE_LIMIT_DELAY,
@@ -83,7 +87,10 @@ def _parse_links(html: str) -> list[tuple[str, str, str]]:
 
 
 def _playwright_download(
-    links: list[tuple[str, str, str]], dest: Path, force: bool
+    links: list[tuple[str, str, str]],
+    dest: Path,
+    force: bool,
+    state: Optional["StateFile"] = None,
 ) -> DownloadResult:
     """Download files using Playwright browser context (handles DoD auth/redirect)."""
     require_playwright()
@@ -99,15 +106,24 @@ def _playwright_download(
 
         for _section, filename, url in links:
             target = dest / filename
-            if target.exists() and target.stat().st_size > 0 and not force:
-                result.skipped.append(filename)
-                continue
+            if not force:
+                if state is not None:
+                    if state.needs_adopt(target):
+                        state.adopt(target, url)
+                    if state.is_fresh(target, url):
+                        result.skipped.append(filename)
+                        continue
+                elif target.exists() and target.stat().st_size > 0:
+                    result.skipped.append(filename)
+                    continue
 
             locator = page.locator(f"a[href='{url}']")
             if locator.count() == 0:
                 # Link not found in live page — try direct HTTP download
                 session = requests.Session()
-                ok, msg = download_file(session, url, target, force=force, referer=SOURCE_URL)
+                ok, msg = download_file(
+                    session, url, target, force=force, referer=SOURCE_URL, state=state
+                )
                 if msg == "skipped":
                     result.skipped.append(filename)
                 elif ok:
@@ -125,6 +141,8 @@ def _playwright_download(
                 if target.stat().st_size == 0:
                     target.unlink(missing_ok=True)
                     raise OSError("Empty file")
+                if state is not None:
+                    state.record(target, url)
                 result.downloaded.append(filename)
             except Exception as exc:  # noqa: BLE001
                 result.errors.append((filename, str(exc)))
@@ -134,7 +152,12 @@ def _playwright_download(
     return result
 
 
-def run(output_dir: Path, dry_run: bool = False, force: bool = False) -> DownloadResult:
+def run(
+    output_dir: Path,
+    dry_run: bool = False,
+    force: bool = False,
+    state: Optional["StateFile"] = None,
+) -> DownloadResult:
     dest = output_dir / "cmmc"
     result = DownloadResult(framework="cmmc")
 
@@ -159,11 +182,11 @@ def run(output_dir: Path, dry_run: bool = False, force: bool = False) -> Downloa
     if dry_run:
         for _section, filename, _url in links:
             target = dest / filename
-            if target.exists() and target.stat().st_size > 0 and not force:
+            if not force and target.exists() and target.stat().st_size > 0:
                 result.skipped.append(filename)
             else:
                 result.downloaded.append(filename)
         return result
 
     dest.mkdir(parents=True, exist_ok=True)
-    return _playwright_download(links, dest, force)
+    return _playwright_download(links, dest, force, state)

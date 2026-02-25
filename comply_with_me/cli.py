@@ -11,6 +11,7 @@ from rich.rule import Rule
 
 from comply_with_me.downloaders import SERVICES, SERVICES_BY_KEY
 from comply_with_me.downloaders.base import DownloadResult
+from comply_with_me.state import StateFile
 
 app = typer.Typer(
     name="cwm",
@@ -67,8 +68,10 @@ def _run_service(key: str, output_dir: Path, dry_run: bool, force: bool) -> Down
         label += " [dim](dry run)[/dim]"
     _console.print(Rule(f"[bold cyan]{label}[/bold cyan]"))
 
+    state = None if dry_run else StateFile(output_dir)
+
     with _console.status("Working..."):
-        result = svc.runner(output_dir, dry_run, force)
+        result = svc.runner(output_dir, dry_run, force, state)
 
     _print_result(result, dry_run)
     return result

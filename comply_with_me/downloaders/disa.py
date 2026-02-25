@@ -6,9 +6,13 @@ import calendar
 import re
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING, Optional
 from urllib.parse import urlparse
 
 import requests
+
+if TYPE_CHECKING:
+    from comply_with_me.state import StateFile
 
 from .base import (
     REQUEST_RETRIES,
@@ -50,10 +54,21 @@ def _probe_url() -> str | None:
     return None
 
 
-def _download_zip(url: str, dest: Path, force: bool) -> tuple[bool, str]:
+def _download_zip(
+    url: str,
+    dest: Path,
+    force: bool,
+    state: Optional["StateFile"] = None,
+) -> tuple[bool, str]:
     """Stream-download the STIG library ZIP to dest."""
-    if dest.exists() and dest.stat().st_size > 0 and not force:
-        return True, "skipped"
+    if not force:
+        if state is not None:
+            if state.needs_adopt(dest):
+                state.adopt(dest, url)
+            if state.is_fresh(dest, url):
+                return True, "skipped"
+        elif dest.exists() and dest.stat().st_size > 0:
+            return True, "skipped"
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     session = requests.Session()
@@ -70,6 +85,8 @@ def _download_zip(url: str, dest: Path, force: bool) -> tuple[bool, str]:
                     if dest.stat().st_size == 0:
                         dest.unlink(missing_ok=True)
                         raise OSError("Empty file after download")
+                    if state is not None:
+                        state.record(dest, url)
                     return True, "downloaded"
                 if resp.status_code == 404:
                     return False, "not found (404)"
@@ -82,7 +99,12 @@ def _download_zip(url: str, dest: Path, force: bool) -> tuple[bool, str]:
     return False, "failed after retries"
 
 
-def run(output_dir: Path, dry_run: bool = False, force: bool = False) -> DownloadResult:
+def run(
+    output_dir: Path,
+    dry_run: bool = False,
+    force: bool = False,
+    state: Optional["StateFile"] = None,
+) -> DownloadResult:
     result = DownloadResult(framework="disa")
     dest = output_dir / "disa-stigs"
 
@@ -99,13 +121,13 @@ def run(output_dir: Path, dry_run: bool = False, force: bool = False) -> Downloa
     target = dest / filename
 
     if dry_run:
-        if target.exists() and target.stat().st_size > 0 and not force:
+        if not force and target.exists() and target.stat().st_size > 0:
             result.skipped.append(filename)
         else:
             result.downloaded.append(filename)
         return result
 
-    ok, msg = _download_zip(url, target, force)
+    ok, msg = _download_zip(url, target, force, state)
     if msg == "skipped":
         result.skipped.append(filename)
     elif ok:

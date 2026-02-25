@@ -6,11 +6,14 @@ import concurrent.futures
 import re
 import time
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
+
+if TYPE_CHECKING:
+    from comply_with_me.state import StateFile
 
 from .base import (
     REQUEST_RETRIES,
@@ -151,14 +154,21 @@ def _download_pub(
     series: str,
     series_type: str,
     force: bool,
+    state: Optional["StateFile"] = None,
 ) -> tuple[str, bool, str]:
     """Download one publication. Returns (filename, success, message)."""
     ser, _num = _extract_series_number(detail_url, series_type)
     filename = sanitize_filename(Path(urlparse(download_url).path).name or f"{ser}.pdf")
     target = base_dir / series / filename
 
-    if target.exists() and target.stat().st_size > 0 and not force:
-        return filename, True, "skipped"
+    if not force:
+        if state is not None:
+            if state.needs_adopt(target):
+                state.adopt(target, download_url)
+            if state.is_fresh(target, download_url):
+                return filename, True, "skipped"
+        elif target.exists() and target.stat().st_size > 0:
+            return filename, True, "skipped"
 
     target.parent.mkdir(parents=True, exist_ok=True)
     time.sleep(DOWNLOAD_RATE_DELAY)
@@ -176,6 +186,8 @@ def _download_pub(
                     if target.stat().st_size == 0:
                         target.unlink(missing_ok=True)
                         raise OSError("Empty file")
+                    if state is not None:
+                        state.record(target, download_url)
                     return filename, True, "downloaded"
                 if resp.status_code == 404:
                     return filename, False, "not found (404)"
@@ -192,7 +204,13 @@ def _download_pub(
 # Public interface
 # ---------------------------------------------------------------------------
 
-def _run(output_dir: Path, series_type: str, dry_run: bool, force: bool) -> DownloadResult:
+def _run(
+    output_dir: Path,
+    series_type: str,
+    dry_run: bool,
+    force: bool,
+    state: Optional["StateFile"] = None,
+) -> DownloadResult:
     result = DownloadResult(framework=f"nist-{series_type}")
     base_url = FINAL_LISTING_URL if series_type == "finals" else DRAFT_LISTING_URL
     subdir = "final-pubs" if series_type == "finals" else "draft-pubs"
@@ -221,7 +239,7 @@ def _run(output_dir: Path, series_type: str, dry_run: bool, force: bool) -> Down
             ser, _num = _extract_series_number(detail_url, series_type)
             filename = sanitize_filename(Path(urlparse(download_url).path).name or f"{ser}.pdf")
             target = base_dir / ser / filename
-            if target.exists() and target.stat().st_size > 0 and not force:
+            if not force and target.exists() and target.stat().st_size > 0:
                 result.skipped.append(filename)
             else:
                 result.downloaded.append(filename)
@@ -232,7 +250,9 @@ def _run(output_dir: Path, series_type: str, dry_run: bool, force: bool) -> Down
     def _dl(item: tuple[str, str]) -> tuple[str, bool, str]:
         detail_url, download_url = item
         ser, _num = _extract_series_number(detail_url, series_type)
-        return _download_pub(session, detail_url, download_url, base_dir, ser, series_type, force)
+        return _download_pub(
+            session, detail_url, download_url, base_dir, ser, series_type, force, state
+        )
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=DOWNLOAD_WORKERS) as ex:
         for filename, ok, msg in ex.map(_dl, downloadable):
@@ -246,11 +266,21 @@ def _run(output_dir: Path, series_type: str, dry_run: bool, force: bool) -> Down
     return result
 
 
-def run_finals(output_dir: Path, dry_run: bool = False, force: bool = False) -> DownloadResult:
+def run_finals(
+    output_dir: Path,
+    dry_run: bool = False,
+    force: bool = False,
+    state: Optional["StateFile"] = None,
+) -> DownloadResult:
     """Download NIST final publications."""
-    return _run(output_dir, "finals", dry_run, force)
+    return _run(output_dir, "finals", dry_run, force, state)
 
 
-def run_drafts(output_dir: Path, dry_run: bool = False, force: bool = False) -> DownloadResult:
+def run_drafts(
+    output_dir: Path,
+    dry_run: bool = False,
+    force: bool = False,
+    state: Optional["StateFile"] = None,
+) -> DownloadResult:
     """Download NIST draft publications."""
-    return _run(output_dir, "drafts", dry_run, force)
+    return _run(output_dir, "drafts", dry_run, force, state)

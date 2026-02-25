@@ -4,17 +4,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable, Optional
 
 from . import cmmc, disa, fedramp, nist
 from .base import DownloadResult
+
+if TYPE_CHECKING:
+    from comply_with_me.state import StateFile
 
 
 @dataclass(frozen=True)
 class ServiceDef:
     key: str
     label: str
-    runner: Callable[[Path, bool, bool], DownloadResult]
+    runner: Callable[[Path, bool, bool, Optional["StateFile"]], DownloadResult]
 
 
 SERVICES: list[ServiceDef] = [
