@@ -1,17 +1,18 @@
 """CMMC resources downloader.
 
 Fetch strategy (in order):
-1. Plain requests.get() — fast, no dependencies, works if DoD hasn't blocked the UA
+1. Plain requests.get() on the resources page — works if DoD WAF allows the request
 2. Playwright headless browser — fallback if plain request is access-denied
-3. manual_required — surfaces the source URL if both methods are blocked
+3. Curated KNOWN_URLS list — used when the page itself cannot be scraped; the
+   individual PDF URLs are direct and publicly accessible even when the HTML
+   page is blocked
 """
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
-from urllib.parse import urljoin, urlparse
+from urllib.parse import unquote, urljoin, urlparse
 
 import requests
 
@@ -19,7 +20,6 @@ if TYPE_CHECKING:
     from comply_with_me.state import StateFile
 
 from .base import (
-    RATE_LIMIT_DELAY,
     REQUEST_TIMEOUT,
     USER_AGENT,
     DownloadResult,
@@ -40,12 +40,49 @@ SECTION_MODULES = {
 
 _ACCESS_DENIED_TITLE = "access denied"
 
+# ---------------------------------------------------------------------------
+# Curated fallback URL list
+# ---------------------------------------------------------------------------
+
+# Date these URLs were last manually verified against SOURCE_URL.
+# Update KNOWN_URLS_VERIFIED whenever you re-confirm the list is current.
+KNOWN_URLS_VERIFIED = "2026-02-25"
+
+# Direct download URLs extracted from SOURCE_URL.
+# Used as a fallback when the resources page cannot be scraped automatically.
+# Format: (section, url)  — section matches SECTION_MODULES keys above.
+KNOWN_URLS: list[tuple[str, str]] = [
+    ("internal", "https://dowcio.war.gov/Portals/0/Documents/CMMC/CMMC-FAQsv4.pdf"),
+    ("internal", "https://dodcio.defense.gov/Portals/0/Documents/CMMC/CMMC-101-Nov2025.pdf"),
+    ("internal", "https://dodcio.defense.gov/Portals/0/Documents/CMMC/ModelOverviewv2.pdf"),
+    ("internal", "https://dodcio.defense.gov/Portals/0/Documents/CMMC/ScopingGuideL1v2.pdf"),
+    ("internal", "https://dodcio.defense.gov/Portals/0/Documents/CMMC/AssessmentGuideL1v2.pdf"),
+    ("internal", "https://dodcio.defense.gov/Portals/0/Documents/CMMC/ScopingGuideL2v2.pdf"),
+    ("internal", "https://dodcio.defense.gov/Portals/0/Documents/CMMC/AssessmentGuideL2v2.pdf"),
+    ("internal", "https://dodcio.defense.gov/Portals/0/Documents/CMMC/ScopingGuideL3v2.pdf"),
+    ("internal", "https://dodcio.defense.gov/Portals/0/Documents/CMMC/AssessmentGuideL3v2.pdf"),
+    ("internal", "https://dodcio.defense.gov/Portals/0/Documents/CMMC/HashingGuide_v2.14.pdf"),
+    ("internal", "https://dodcio.defense.gov/Portals/0/Documents/CMMC/CMMC-AlignmentNIST-Standards.pdf"),
+    ("internal", "https://dodcio.defense.gov/Portals/0/Documents/CMMC/CMMC-SPRS.pdf"),
+    ("internal", "https://dodcio.defense.gov/Portals/0/Documents/CMMC/CMMC-eMASS.pdf?ver=l-hPeQGKDLRXdQrpxM2AQg%3d%3d"),
+    ("internal", "https://dodcio.defense.gov/Portals/0/Documents/CMMC/FedRAMP-AuthorizationEquivalency.pdf"),
+    ("internal", "https://dodcio.defense.gov/Portals/0/Documents/CMMC/CMMC-LevelsDeterminationBrief_v2.pdf"),
+    ("internal", "https://dodcio.defense.gov/Portals/0/Documents/CMMC/TechImplementationCMMC-Rqrmnts.pdf"),
+    ("internal", "https://dodcio.defense.gov/Portals/0/Documents/CMMC/OrgDefinedParmsNISTSP800-171.pdf"),
+    ("external", "https://cyberab.org/Portals/0/CMMC%20Assessment%20Process%20v2.0.pdf"),
+    ("external", "https://www.esd.whs.mil/Portals/54/Documents/DD/issuances/dodi/500090p.PDF"),
+    ("external", "https://dodcio.defense.gov/Portals/0/Documents/Library/FulcrumAdvStrat.pdf"),
+]
+
+# ---------------------------------------------------------------------------
+# Page fetching
+# ---------------------------------------------------------------------------
+
 
 def _fetch_html_plain() -> Optional[str]:
-    """Try fetching the page with plain requests.
+    """Fetch the resources page with plain requests.
 
-    Returns the response text, or None if the request fails or returns non-200.
-    Does NOT check for access-denied content — caller handles that.
+    Returns the response text on HTTP 200, or None on error / non-200.
     """
     try:
         resp = requests.get(
@@ -61,7 +98,7 @@ def _fetch_html_plain() -> Optional[str]:
 
 
 def _fetch_html_playwright() -> str:
-    """Fetch page HTML using a Playwright headless browser."""
+    """Fetch the resources page using a Playwright headless browser."""
     require_playwright()
     from playwright.sync_api import sync_playwright
 
@@ -112,6 +149,42 @@ def _parse_links(html: str) -> list[tuple[str, str, str]]:
     return links
 
 
+def _try_scrape() -> Optional[list[tuple[str, str, str]]]:
+    """Attempt to scrape the resources page. Returns parsed links or None if blocked."""
+    # Attempt 1: plain requests
+    html = _fetch_html_plain()
+    if html is not None and not _is_access_denied(html):
+        links = _parse_links(html)
+        if links:
+            return links
+
+    # Attempt 2: Playwright
+    try:
+        html = _fetch_html_playwright()
+        if not _is_access_denied(html):
+            links = _parse_links(html)
+            if links:
+                return links
+    except Exception:  # noqa: BLE001
+        pass
+
+    return None
+
+
+def _links_from_known_urls() -> list[tuple[str, str, str]]:
+    """Convert KNOWN_URLS to the standard (section, filename, url) format."""
+    links = []
+    for section, url in KNOWN_URLS:
+        filename = sanitize_filename(unquote(Path(urlparse(url).path).name))
+        links.append((section, filename, url))
+    return links
+
+
+# ---------------------------------------------------------------------------
+# Downloading
+# ---------------------------------------------------------------------------
+
+
 def _requests_download(
     links: list[tuple[str, str, str]],
     dest: Path,
@@ -135,70 +208,9 @@ def _requests_download(
     return result
 
 
-def _playwright_download(
-    links: list[tuple[str, str, str]],
-    dest: Path,
-    force: bool,
-    state: Optional["StateFile"] = None,
-) -> DownloadResult:
-    """Download files using Playwright browser context (handles DoD auth/redirect)."""
-    require_playwright()
-    from playwright.sync_api import sync_playwright
-
-    result = DownloadResult(framework="cmmc")
-
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
-        context = browser.new_context(user_agent=USER_AGENT)
-        page = context.new_page()
-        page.goto(SOURCE_URL, wait_until="networkidle")
-
-        for _section, filename, url in links:
-            target = dest / filename
-            if not force:
-                if state is not None:
-                    if state.needs_adopt(target):
-                        state.adopt(target, url)
-                    if state.is_fresh(target, url):
-                        result.skipped.append(filename)
-                        continue
-                elif target.exists() and target.stat().st_size > 0:
-                    result.skipped.append(filename)
-                    continue
-
-            locator = page.locator(f"a[href='{url}']")
-            if locator.count() == 0:
-                # Link not found in live page — try direct HTTP download
-                session = requests.Session()
-                ok, msg = download_file(
-                    session, url, target, force=force, referer=SOURCE_URL, state=state
-                )
-                if msg == "skipped":
-                    result.skipped.append(filename)
-                elif ok:
-                    result.downloaded.append(filename)
-                else:
-                    result.manual_required.append((filename, url))
-                continue
-
-            try:
-                time.sleep(RATE_LIMIT_DELAY)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                with page.expect_download(timeout=REQUEST_TIMEOUT * 1000) as dl_info:
-                    locator.first.click()
-                dl_info.value.save_as(str(target))
-                if target.stat().st_size == 0:
-                    target.unlink(missing_ok=True)
-                    raise OSError("Empty file")
-                if state is not None:
-                    state.record(target, url)
-                result.downloaded.append(filename)
-            except Exception as exc:  # noqa: BLE001
-                result.errors.append((filename, str(exc)))
-
-        browser.close()
-
-    return result
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 
 def run(
@@ -210,24 +222,10 @@ def run(
     dest = output_dir / "cmmc"
     result = DownloadResult(framework="cmmc")
 
-    # --- Step 1: try plain requests ---
-    html = _fetch_html_plain()
-    use_playwright = False
-
-    if html is None or _is_access_denied(html):
-        # --- Step 2: fall back to Playwright ---
-        try:
-            html = _fetch_html_playwright()
-            use_playwright = True
-        except Exception:  # noqa: BLE001
-            result.manual_required.append(("CMMC Resources page", SOURCE_URL))
-            return result
-
-    if _is_access_denied(html):
-        result.manual_required.append(("CMMC Resources page", SOURCE_URL))
-        return result
-
-    links = _parse_links(html)
+    links = _try_scrape()
+    used_known_urls = links is None
+    if links is None:
+        links = _links_from_known_urls()
 
     if not links:
         result.manual_required.append(("CMMC Resources page (no links detected)", SOURCE_URL))
@@ -240,9 +238,18 @@ def run(
                 result.skipped.append(filename)
             else:
                 result.downloaded.append(filename)
+        if used_known_urls:
+            result.notices.append(
+                f"URL list last verified {KNOWN_URLS_VERIFIED}. "
+                f"Check {SOURCE_URL} for new documents."
+            )
         return result
 
     dest.mkdir(parents=True, exist_ok=True)
-    if use_playwright:
-        return _playwright_download(links, dest, force, state)
-    return _requests_download(links, dest, force, state)
+    result = _requests_download(links, dest, force, state)
+    if used_known_urls:
+        result.notices.append(
+            f"URL list last verified {KNOWN_URLS_VERIFIED} — "
+            f"check {SOURCE_URL} for new documents."
+        )
+    return result

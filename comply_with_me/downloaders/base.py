@@ -31,6 +31,7 @@ class DownloadResult:
     skipped: list[str] = field(default_factory=list)
     errors: list[tuple[str, str]] = field(default_factory=list)
     manual_required: list[tuple[str, str]] = field(default_factory=list)
+    notices: list[str] = field(default_factory=list)
 
     @property
     def total(self) -> int:

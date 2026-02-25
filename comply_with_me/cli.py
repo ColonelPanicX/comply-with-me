@@ -59,6 +59,10 @@ def _print_result(result: DownloadResult, dry_run: bool) -> None:
             f"[bold]source-content/{result.framework}/[/bold] when done."
         )
 
+    if result.notices:
+        for notice in result.notices:
+            _console.print(f"  [dim cyan]note: {notice}[/dim cyan]")
+
     if not any([result.downloaded, result.skipped, result.errors, result.manual_required]):
         _console.print("  [dim]Nothing to do.[/dim]")
 
