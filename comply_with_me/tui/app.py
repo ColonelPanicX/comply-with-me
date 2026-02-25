@@ -129,7 +129,7 @@ class DashboardScreen(Screen):
             row_key, _ = table.coordinate_to_cell_key(
                 Coordinate(table.cursor_row, 0)
             )
-            return str(row_key)
+            return row_key.value  # RowKey.value is the str we passed to add_row(key=...)
         except Exception:  # noqa: BLE001
             idx = table.cursor_row
             return SERVICES[idx].key if 0 <= idx < len(SERVICES) else None
