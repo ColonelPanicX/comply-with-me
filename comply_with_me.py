@@ -66,8 +66,10 @@ def _bootstrap() -> None:
             print("\nThen run the script again.")
             sys.exit(1)
 
+        pkg_list = ", ".join(pkg for pkg, _ in REQUIRED)
         print("Comply With Me needs a local environment to run.\n")
-        print(f"It will be created at: {VENV_DIR}\n")
+        print(f"It will be created at: {VENV_DIR}")
+        print(f"Packages to install  : {pkg_list}\n")
         try:
             answer = input("Set it up now? [y/N] ").strip().lower()
         except (KeyboardInterrupt, EOFError):
