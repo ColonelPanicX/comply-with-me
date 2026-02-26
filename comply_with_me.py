@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Comply With Me — run with: python3 cwm.py"""
+"""Comply With Me — run with: python3 comply_with_me.py"""
 
 from __future__ import annotations
 

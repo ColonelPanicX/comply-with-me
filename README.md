@@ -19,7 +19,7 @@ Python 3.9 or later. That's it — the tool handles everything else itself.
 ## Quick Start
 
 ```bash
-python3 cwm.py
+python3 comply_with_me.py
 ```
 
 On first run, the tool will:
@@ -34,7 +34,7 @@ Every run after that goes straight to the menu — no activation, no setup.
 > ```bash
 > sudo apt install python3.12-venv   # adjust version to match your Python
 > ```
-> Then run `python3 cwm.py` again.
+> Then run `python3 comply_with_me.py` again.
 
 ## Usage
 

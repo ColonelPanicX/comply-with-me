@@ -1,12 +1,11 @@
 # ── Data directories (local only — not for distribution) ──────────────────────
-source-content/
+# Downloaded content is never committed; placeholder READMEs for paywalled
+# frameworks are the exception — they are tracked via the negation rules below.
+source-content/**
+!source-content/*/
+!source-content/*/README.md
 normalized-content/
 docs/
-
-# Per-downloader generated output (runtime state, not code)
-scripts/*/reports/
-scripts/*/downloads/
-scripts/nist-auto-dl/reports/
 
 # ── AI Agent Directories ───────────────────────────────────────────────────────
 .claude/
