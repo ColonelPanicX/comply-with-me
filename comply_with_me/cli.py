@@ -10,7 +10,9 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 def _check_dependencies() -> None:
-    """Verify required packages are installed and print install instructions if not."""
+    """Verify required packages are installed; offer to install them if missing."""
+    import subprocess
+
     required = [
         ("requests",       "requests"),
         ("beautifulsoup4", "bs4"),
@@ -22,10 +24,30 @@ def _check_dependencies() -> None:
         except ImportError:
             missing_pkgs.append(pkg_name)
 
-    if missing_pkgs:
-        print("Comply With Me is missing required packages:\n")
-        for pkg in missing_pkgs:
-            print(f"  - {pkg}")
+    if not missing_pkgs:
+        return
+
+    print("Comply With Me is missing required packages:\n")
+    for pkg in missing_pkgs:
+        print(f"  - {pkg}")
+    print()
+
+    try:
+        answer = input("Install them now? [y/N] ").strip().lower()
+    except (KeyboardInterrupt, EOFError):
+        print()
+        sys.exit(1)
+
+    if answer in ("y", "yes"):
+        print()
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install"] + missing_pkgs
+        )
+        if result.returncode != 0:
+            print("\nInstallation failed. Please install manually and try again.")
+            sys.exit(1)
+        print()
+    else:
         print()
         print("Install them with:")
         print(f"  pip install {' '.join(missing_pkgs)}")
