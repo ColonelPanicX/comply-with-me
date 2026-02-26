@@ -106,14 +106,11 @@ def _run_normalize(source_dir: Path, output_dir: Path) -> None:
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Track counts per framework for the summary line
-    counts: dict[str, dict] = {}
+    seen_frameworks: set[str] = set()
 
     def _progress(framework_key: str, filename: str) -> None:
-        if framework_key not in counts:
-            counts[framework_key] = {"processed": 0, "skipped": 0, "errors": 0, "unsupported": 0}
-        # Print a rolling framework header the first time we see a new framework
-        if counts[framework_key]["processed"] + counts[framework_key]["skipped"] == 0:
+        if framework_key not in seen_frameworks:
+            seen_frameworks.add(framework_key)
             print(f"  Normalizing {framework_key}...", flush=True)
 
     print("Normalizing downloaded documents...")
