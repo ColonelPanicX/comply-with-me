@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 import requests
 
 if TYPE_CHECKING:
-    from comply_with_me.state import StateFile
+    from cwm.state import StateFile
 
 from .base import (
     REQUEST_RETRIES,

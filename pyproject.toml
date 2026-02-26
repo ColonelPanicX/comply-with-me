@@ -16,11 +16,11 @@ dependencies = [
 ]
 
 [project.scripts]
-cwm = "comply_with_me.cli:main"
+cwm = "cwm.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["comply_with_me*"]
+include = ["cwm*"]
 
 [tool.ruff]
 target-version = "py39"

@@ -11,7 +11,7 @@ import requests
 from bs4 import BeautifulSoup
 
 if TYPE_CHECKING:
-    from comply_with_me.state import StateFile
+    from cwm.state import StateFile
 
 from .base import (
     REQUEST_RETRIES,

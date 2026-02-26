@@ -10,7 +10,7 @@ from . import cisa_bod, cmmc, disa, fedramp, nist
 from .base import DownloadResult
 
 if TYPE_CHECKING:
-    from comply_with_me.state import StateFile
+    from cwm.state import StateFile
 
 
 @dataclass(frozen=True)
