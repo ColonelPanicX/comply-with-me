@@ -15,6 +15,7 @@ VENV_PYTHON = VENV_DIR / "bin" / "python3"
 REQUIRED = [
     ("requests",       "requests"),
     ("beautifulsoup4", "bs4"),
+    ("pymupdf",        "fitz"),
 ]
 
 

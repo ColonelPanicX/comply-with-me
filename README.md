@@ -47,18 +47,52 @@ Comply With Me
   3. NIST Draft Publications           92 files  146.0 MB  last synced 2026-02-25
   4. CMMC                              17 files  18.3 MB  last synced 2026-02-25
   5. DISA STIGs                         1 files  350.0 MB  last synced 2026-02-25
+  6. CISA Binding Operational Directives  17 files  0.5 MB  last synced 2026-02-25
 
-  6. Sync All
+  7. Sync All
+  8. Normalize Downloaded Documents
   0. Quit
 
 Select:
 ```
 
-Select a number to sync that framework, or choose **Sync All** to pull everything at once. Downloaded files land in `source-content/<framework>/`. The tool skips files it already has and only downloads what's changed or new.
+Select a number to sync that framework, choose **Sync All** to pull everything at once, or choose **Normalize Downloaded Documents** to convert your downloaded files to Markdown and JSON.
+
+Downloaded files land in `source-content/<framework>/`. The tool skips files it already has and only downloads what's changed or new.
+
+## Normalization
+
+The **Normalize** option converts downloaded documents into machine-readable formats suitable for AI pipelines, RAG systems, and MCP servers:
+
+- **PDF files** — text extracted page-by-page via [pymupdf](https://pymupdf.readthedocs.io/)
+- **HTML files** — main content extracted and structured by heading via BeautifulSoup
+
+Each source file produces two output files side-by-side in `normalized-content/`:
+
+| File | Purpose |
+|---|---|
+| `<stem>.md` | Human-readable Markdown with YAML frontmatter |
+| `<stem>.json` | Machine-readable JSON with sections, full text, and metadata |
+
+**JSON schema:**
+```json
+{
+  "source_file": "ModelOverviewv2.pdf",
+  "framework": "cmmc",
+  "extracted_at": "2026-02-26T14:30:00",
+  "sections": [
+    { "heading": "Page 1", "level": 1, "content": "..." }
+  ],
+  "full_text": "Complete concatenated text..."
+}
+```
+
+> **Note:** DISA STIGs are excluded from v1 normalization — their XCCDF XML structure requires a dedicated parser.
 
 ## How It Works
 
 - **State tracking:** A `.cwm-state.json` file in `source-content/` records the hash and metadata of every downloaded file. On each sync, files are compared by hash — unchanged files are skipped.
+- **Normalization:** Already-normalized files are skipped on re-runs. Use the normalize option again after syncing new documents to catch additions.
 - **CMMC fallback:** The DoD portal uses WAF protection that blocks automated scrapers. The tool first attempts a live scrape; if that fails, it falls back to a curated list of known PDF URLs. A notice is printed when the fallback is used, along with the date the list was last verified.
 - **DISA STIGs:** Downloads the full SRG/STIG archive ZIP from the DoD Cyber Exchange. This is a large file (~350 MB).
 
@@ -74,6 +108,16 @@ source-content/
 ├── cmmc/
 ├── disa-stigs/
 └── cisa-bod/
+
+normalized-content/
+├── fedramp/
+│   ├── fedramp-rev5-baselines.md
+│   └── fedramp-rev5-baselines.json
+├── nist/
+│   ├── final-pubs/
+│   └── draft-pubs/
+├── cmmc/
+└── cisa-bod/
 ```
 
 ## Known Limitations
@@ -81,3 +125,4 @@ source-content/
 - **DISA STIGs:** The probe logic searches recent months for the current archive. If DISA changes their naming convention, the downloader may need an update.
 - **CMMC:** If live scraping fails and the fallback URL list is stale, some newer documents may be missed. The tool prints a notice with the verification date when this occurs.
 - **NIST:** A small number of publications have no direct download link on CSRC and will be skipped.
+- **Normalization — scanned PDFs:** PDFs that are image-only (no text layer) will produce empty or minimal output. OCR support is not included in v1.

@@ -14,6 +14,7 @@ def _check_dependencies() -> None:
     required = [
         ("requests",       "requests"),
         ("beautifulsoup4", "bs4"),
+        ("pymupdf",        "fitz"),
     ]
     missing_pkgs = []
     for pkg_name, import_name in required:
@@ -66,8 +67,10 @@ def _print_menu(services, entries: dict) -> None:
         print(f"  {i}. {svc.label:<32} {info}")
 
     sync_all_n = len(services) + 1
+    normalize_n = len(services) + 2
     print()
     print(f"  {sync_all_n}. Sync All")
+    print(f"  {normalize_n}. Normalize Downloaded Documents")
     print("  0. Quit")
     print()
 
@@ -98,6 +101,49 @@ def _run_sync(svc, output_dir: Path, state) -> None:
         print(f" failed.\n  Error: {exc}")
 
 
+def _run_normalize(source_dir: Path, output_dir: Path) -> None:
+    from comply_with_me.normalizer import normalize_all
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Track counts per framework for the summary line
+    counts: dict[str, dict] = {}
+
+    def _progress(framework_key: str, filename: str) -> None:
+        if framework_key not in counts:
+            counts[framework_key] = {"processed": 0, "skipped": 0, "errors": 0, "unsupported": 0}
+        # Print a rolling framework header the first time we see a new framework
+        if counts[framework_key]["processed"] + counts[framework_key]["skipped"] == 0:
+            print(f"  Normalizing {framework_key}...", flush=True)
+
+    print("Normalizing downloaded documents...")
+    print("  (This may take a while for large collections.)")
+    print()
+
+    try:
+        result = normalize_all(source_dir, output_dir, force=False, progress_callback=_progress)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  Normalization failed: {exc}")
+        return
+
+    print()
+    if result.processed:
+        print(f"  Normalized   : {len(result.processed)}")
+    if result.skipped:
+        print(f"  Already done : {len(result.skipped)}")
+    if result.unsupported:
+        print(f"  Skipped (unsupported format) : {len(result.unsupported)}")
+    if result.errors:
+        print(f"  Errors       : {len(result.errors)}")
+        for name, err in result.errors:
+            print(f"    {name}: {err}")
+    if not result.processed and not result.skipped and not result.errors:
+        print("  Nothing to normalize — sync a framework first.")
+
+    print()
+    print(f"  Output: {output_dir}/")
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -109,9 +155,10 @@ def main() -> None:
     from comply_with_me.downloaders import SERVICES
     from comply_with_me.state import StateFile
 
-    output_dir = Path("source-content")
-    output_dir.mkdir(parents=True, exist_ok=True)
-    state = StateFile(output_dir)
+    source_dir = Path("source-content")
+    normalized_dir = Path("normalized-content")
+    source_dir.mkdir(parents=True, exist_ok=True)
+    state = StateFile(source_dir)
 
     while True:
         _print_menu(SERVICES, state.entries())
@@ -132,11 +179,14 @@ def main() -> None:
 
         n = int(choice)
         sync_all_n = len(SERVICES) + 1
+        normalize_n = len(SERVICES) + 2
 
         if 1 <= n <= len(SERVICES):
-            _run_sync(SERVICES[n - 1], output_dir, state)
+            _run_sync(SERVICES[n - 1], source_dir, state)
         elif n == sync_all_n:
             for svc in SERVICES:
-                _run_sync(svc, output_dir, state)
+                _run_sync(svc, source_dir, state)
+        elif n == normalize_n:
+            _run_normalize(source_dir, normalized_dir)
         else:
             print("Invalid selection.")
