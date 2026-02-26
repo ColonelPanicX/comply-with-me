@@ -117,7 +117,7 @@ if not _in_managed_venv():
 
 # Running inside .cwm-venv — all deps are present
 sys.path.insert(0, str(SCRIPT_DIR))
-from comply_with_me.cli import main  # noqa: E402
+from cwm.cli import main  # noqa: E402
 
 if __name__ == "__main__":
     main()

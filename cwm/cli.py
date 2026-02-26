@@ -102,7 +102,7 @@ def _run_sync(svc, output_dir: Path, state) -> None:
 
 
 def _run_normalize(source_dir: Path, output_dir: Path) -> None:
-    from comply_with_me.normalizer import normalize_all
+    from cwm.normalizer import normalize_all
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -149,8 +149,8 @@ def main() -> None:
     _check_dependencies()
 
     # Lazy imports — only reached if dependencies are present
-    from comply_with_me.downloaders import SERVICES
-    from comply_with_me.state import StateFile
+    from cwm.downloaders import SERVICES
+    from cwm.state import StateFile
 
     source_dir = Path("source-content")
     normalized_dir = Path("normalized-content")

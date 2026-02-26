@@ -273,7 +273,7 @@ def normalize_all(
     progress_callback(framework_key, filename) is called before each file
     if provided — useful for live CLI progress reporting.
     """
-    from comply_with_me.downloaders import SERVICES
+    from cwm.downloaders import SERVICES
 
     result = NormalizeResult()
 

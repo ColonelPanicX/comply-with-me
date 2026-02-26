@@ -17,7 +17,7 @@ from urllib.parse import unquote, urljoin, urlparse
 import requests
 
 if TYPE_CHECKING:
-    from comply_with_me.state import StateFile
+    from cwm.state import StateFile
 
 from .base import (
     REQUEST_TIMEOUT,
@@ -242,7 +242,7 @@ def run(
             result.notices.append(
                 f"Automated download unavailable — DoD portal blocked access. "
                 f"Used last-known-good URL list (last verified {KNOWN_URLS_VERIFIED}). "
-                f"See comply_with_me/downloaders/cmmc.py (KNOWN_URLS) for the full URL list."
+                f"See cwm/downloaders/cmmc.py (KNOWN_URLS) for the full URL list."
             )
         return result
 
@@ -252,6 +252,6 @@ def run(
         result.notices.append(
             f"Automated download unavailable — DoD portal blocked access. "
             f"Used last-known-good URL list (last verified {KNOWN_URLS_VERIFIED}). "
-            f"See comply_with_me/downloaders/cmmc.py (KNOWN_URLS) for the full URL list."
+            f"See cwm/downloaders/cmmc.py (KNOWN_URLS) for the full URL list."
         )
     return result
