@@ -27,8 +27,8 @@ def _check_dependencies() -> None:
         for pkg in missing_pkgs:
             print(f"  - {pkg}")
         print()
-        print("Run the tool via cwm.py to install automatically:")
-        print("  python3 cwm.py")
+        print("Run the tool via comply_with_me.py to install automatically:")
+        print("  python3 comply_with_me.py")
         print()
         sys.exit(1)
 
@@ -91,8 +91,9 @@ def _run_sync(svc, output_dir: Path, state) -> None:
                 print(f"    {label}")
                 print(f"    {url}")
         if result.notices:
+            print()
             for notice in result.notices:
-                print(f"  Note: {notice}")
+                print(f"  [!] {notice}")
     except Exception as exc:  # noqa: BLE001
         print(f" failed.\n  Error: {exc}")
 

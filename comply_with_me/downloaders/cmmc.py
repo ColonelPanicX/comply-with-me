@@ -240,8 +240,9 @@ def run(
                 result.downloaded.append(filename)
         if used_known_urls:
             result.notices.append(
-                f"URL list last verified {KNOWN_URLS_VERIFIED}. "
-                f"Check {SOURCE_URL} for new documents."
+                f"Automated download unavailable — DoD portal blocked access. "
+                f"Used last-known-good URL list (last verified {KNOWN_URLS_VERIFIED}). "
+                f"See comply_with_me/downloaders/cmmc.py (KNOWN_URLS) for the full URL list."
             )
         return result
 
@@ -249,7 +250,8 @@ def run(
     result = _requests_download(links, dest, force, state)
     if used_known_urls:
         result.notices.append(
-            f"URL list last verified {KNOWN_URLS_VERIFIED} — "
-            f"check {SOURCE_URL} for new documents."
+            f"Automated download unavailable — DoD portal blocked access. "
+            f"Used last-known-good URL list (last verified {KNOWN_URLS_VERIFIED}). "
+            f"See comply_with_me/downloaders/cmmc.py (KNOWN_URLS) for the full URL list."
         )
     return result
