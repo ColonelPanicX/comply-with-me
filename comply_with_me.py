@@ -16,6 +16,7 @@ REQUIRED = [
     ("requests",       "requests"),
     ("beautifulsoup4", "bs4"),
     ("pymupdf",        "fitz"),
+    ("playwright",     "playwright"),
 ]
 
 
@@ -107,7 +108,54 @@ def _bootstrap() -> None:
         print(" done.")
         print()
 
+    _ensure_playwright_browser()
     os.execv(str(VENV_PYTHON), [str(VENV_PYTHON), __file__] + sys.argv[1:])
+
+
+def _playwright_browser_ok() -> bool:
+    """Return True if Playwright's Chromium browser can be launched."""
+    try:
+        r = subprocess.run(
+            [str(VENV_PYTHON), "-c",
+             "from playwright.sync_api import sync_playwright;"
+             "p=sync_playwright().start();"
+             "p.chromium.launch(headless=True,args=['--no-sandbox']).close();"
+             "p.stop()"],
+            capture_output=True,
+            timeout=20,
+        )
+        return r.returncode == 0
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+
+def _ensure_playwright_browser() -> None:
+    """Prompt once to install the Playwright Chromium browser if not already present."""
+    if _playwright_browser_ok():
+        return
+    print("Playwright browser (Chromium) is not installed.")
+    print("It enables automatic download for JavaScript-protected sites (e.g. CISA BOD).")
+    print("Browser download is ~150 MB and is a one-time operation.")
+    try:
+        answer = input("Install Playwright browser now? [y/N] ").strip().lower()
+    except (KeyboardInterrupt, EOFError):
+        print()
+        return
+    if answer not in ("y", "yes"):
+        print("Skipped. CISA BOD automatic sync will require manual download.")
+        print()
+        return
+    print("Installing Playwright browser...", end="", flush=True)
+    r = subprocess.run(
+        [str(VENV_PYTHON), "-m", "playwright", "install", "chromium"],
+        capture_output=True,
+    )
+    if r.returncode == 0:
+        print(" done.")
+    else:
+        print(" failed.")
+        print(f"Run manually: {VENV_PYTHON} -m playwright install chromium")
+    print()
 
 
 def _in_managed_venv() -> bool:

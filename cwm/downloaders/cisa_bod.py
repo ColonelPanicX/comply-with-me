@@ -171,6 +171,82 @@ def _try_scrape() -> Optional[list[tuple[str, str]]]:
 
 
 # ---------------------------------------------------------------------------
+# Page downloading (requests → Playwright fallback)
+# ---------------------------------------------------------------------------
+
+
+def _playwright_download_pages(
+    links: list[tuple[str, str]],
+    dest: Path,
+    force: bool,
+    state: Optional["StateFile"],
+) -> tuple[list[str], list[str], list[tuple[str, str]]]:
+    """Fetch BOD HTML pages via Playwright. Returns (downloaded, skipped, errors)."""
+    downloaded: list[str] = []
+    skipped: list[str] = []
+    errors: list[tuple[str, str]] = []
+
+    try:
+        require_playwright()
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
+            pg = browser.new_page(user_agent=USER_AGENT)
+            for filename, url in links:
+                target = dest / filename
+                if not force and target.exists() and target.stat().st_size > 0:
+                    skipped.append(filename)
+                    continue
+                try:
+                    pg.goto(url, wait_until="networkidle", timeout=30000)
+                    html = pg.content()
+                    target.write_text(html, encoding="utf-8")
+                    if state is not None:
+                        state.record(target, url)
+                    downloaded.append(filename)
+                except Exception as exc:  # noqa: BLE001
+                    errors.append((filename, f"playwright: {exc}"))
+            browser.close()
+    except Exception:  # noqa: BLE001
+        hint = "WAF blocked; install Playwright browser to enable auto-download"
+        for filename, _url in links:
+            errors.append((filename, hint))
+
+    return downloaded, skipped, errors
+
+
+def _download_pages(
+    links: list[tuple[str, str]],
+    dest: Path,
+    force: bool,
+    state: Optional["StateFile"] = None,
+) -> DownloadResult:
+    """Download BOD HTML pages: plain requests first, Playwright fallback for failures."""
+    result = DownloadResult(framework="cisa-bod")
+    session = requests.Session()
+    needs_playwright: list[tuple[str, str]] = []
+
+    for filename, url in links:
+        target = dest / filename
+        ok, msg = download_file(session, url, target, force=force, referer=SOURCE_URL, state=state)
+        if msg == "skipped":
+            result.skipped.append(filename)
+        elif ok:
+            result.downloaded.append(filename)
+        else:
+            needs_playwright.append((filename, url))
+
+    if needs_playwright:
+        pw_dl, pw_sk, pw_err = _playwright_download_pages(needs_playwright, dest, force, state)
+        result.downloaded.extend(pw_dl)
+        result.skipped.extend(pw_sk)
+        result.errors.extend(pw_err)
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -182,7 +258,6 @@ def run(
     state: Optional["StateFile"] = None,
 ) -> DownloadResult:
     dest = output_dir / "cisa-bod"
-    result = DownloadResult(framework="cisa-bod")
 
     links = _try_scrape()
     used_known_urls = links is None
@@ -190,10 +265,12 @@ def run(
         links = _links_from_known_urls()
 
     if not links:
+        result = DownloadResult(framework="cisa-bod")
         result.errors.append(("", f"Failed to fetch CISA directives index: {SOURCE_URL}"))
         return result
 
     if dry_run:
+        result = DownloadResult(framework="cisa-bod")
         for filename, _url in links:
             target = dest / filename
             if not force and target.exists() and target.stat().st_size > 0:
@@ -210,18 +287,7 @@ def run(
 
     dest.mkdir(parents=True, exist_ok=True)
     _write_known_urls_file(dest)
-    session = requests.Session()
-
-    for filename, url in links:
-        target = dest / filename
-        ok, msg = download_file(session, url, target, force=force, referer=SOURCE_URL, state=state)
-        if msg == "skipped":
-            result.skipped.append(filename)
-        elif ok:
-            result.downloaded.append(filename)
-        else:
-            result.errors.append((filename, msg))
-
+    result = _download_pages(links, dest, force, state)
     if used_known_urls:
         result.notices.append(
             f"Automated index scrape unavailable — CISA WAF blocked access. "
