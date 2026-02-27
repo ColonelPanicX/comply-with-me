@@ -60,6 +60,8 @@ def _extract_pdf(path: Path) -> list[dict]:
     """
     import fitz  # type: ignore[import]
 
+    fitz.TOOLS.mupdf_display_errors(False)  # suppress layer/OCG warnings to stderr
+
     sections: list[dict] = []
     try:
         doc = fitz.open(str(path))
@@ -73,7 +75,7 @@ def _extract_pdf(path: Path) -> list[dict]:
                 })
         doc.close()
     except Exception as exc:  # noqa: BLE001
-        raise RuntimeError(f"pymupdf failed to open {path.name}: {exc}") from exc
+        raise RuntimeError(f"pymupdf failed: {exc}") from exc
 
     return sections
 
@@ -243,7 +245,7 @@ def _normalize_file(
         return "error", str(exc)
 
     if not sections:
-        return "error", f"{name}: no text content extracted"
+        return "error", "no text content extracted"
 
     extracted_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     output_subdir.mkdir(parents=True, exist_ok=True)
@@ -252,7 +254,7 @@ def _normalize_file(
         _write_markdown(sections, framework, name, extracted_at, md_dest)
         _write_json(sections, framework, name, extracted_at, json_dest)
     except OSError as exc:
-        return "error", f"{name}: write failed: {exc}"
+        return "error", f"write failed: {exc}"
 
     return "processed", name
 
@@ -305,6 +307,6 @@ def normalize_all(
             elif status == "unsupported":
                 result.unsupported.append(msg)
             else:
-                result.errors.append((msg, "extraction failed"))
+                result.errors.append((source_path.name, msg))
 
     return result
