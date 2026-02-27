@@ -140,6 +140,19 @@ def _links_from_known_urls() -> list[tuple[str, str]]:
     return links
 
 
+def _write_known_urls_file(dest: Path) -> None:
+    """Write a plain-text list of KNOWN_URLS to dest/_known-urls.txt."""
+    lines = [
+        f"# CISA BOD known fallback URLs — last verified {KNOWN_URLS_VERIFIED}",
+        "# Used when the CISA WAF blocks automated scraping of the directives index.",
+        f"# Source page: {SOURCE_URL}",
+        "",
+    ]
+    for url in KNOWN_URLS:
+        lines.append(url)
+    (dest / "_known-urls.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def _try_scrape() -> Optional[list[tuple[str, str]]]:
     """Try plain requests then Playwright to scrape the index. Returns links or None."""
     html = _fetch_html_plain()
@@ -191,11 +204,12 @@ def run(
             result.notices.append(
                 f"Automated index scrape unavailable — CISA WAF blocked access. "
                 f"Used last-known-good URL list (last verified {KNOWN_URLS_VERIFIED}). "
-                f"See cwm/downloaders/cisa_bod.py (KNOWN_URLS) for the full URL list."
+                f"See source-content/cisa-bod/_known-urls.txt for the full URL list."
             )
         return result
 
     dest.mkdir(parents=True, exist_ok=True)
+    _write_known_urls_file(dest)
     session = requests.Session()
 
     for filename, url in links:
@@ -212,7 +226,7 @@ def run(
         result.notices.append(
             f"Automated index scrape unavailable — CISA WAF blocked access. "
             f"Used last-known-good URL list (last verified {KNOWN_URLS_VERIFIED}). "
-            f"See cwm/downloaders/cisa_bod.py (KNOWN_URLS) for the full URL list."
+            f"See source-content/cisa-bod/_known-urls.txt for the full URL list."
         )
 
     return result

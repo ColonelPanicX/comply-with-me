@@ -181,6 +181,24 @@ def _links_from_known_urls() -> list[tuple[str, str, str]]:
 
 
 # ---------------------------------------------------------------------------
+# Known-URL file writer
+# ---------------------------------------------------------------------------
+
+
+def _write_known_urls_file(dest: Path) -> None:
+    """Write a plain-text list of KNOWN_URLS to dest/_known-urls.txt."""
+    lines = [
+        f"# CMMC known fallback URLs — last verified {KNOWN_URLS_VERIFIED}",
+        "# Used when the DoD portal blocks automated scraping of the resources page.",
+        f"# Source page: {SOURCE_URL}",
+        "",
+    ]
+    for _section, url in KNOWN_URLS:
+        lines.append(url)
+    (dest / "_known-urls.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
 # Downloading
 # ---------------------------------------------------------------------------
 
@@ -242,16 +260,17 @@ def run(
             result.notices.append(
                 f"Automated download unavailable — DoD portal blocked access. "
                 f"Used last-known-good URL list (last verified {KNOWN_URLS_VERIFIED}). "
-                f"See cwm/downloaders/cmmc.py (KNOWN_URLS) for the full URL list."
+                f"See source-content/cmmc/_known-urls.txt for the full URL list."
             )
         return result
 
     dest.mkdir(parents=True, exist_ok=True)
+    _write_known_urls_file(dest)
     result = _requests_download(links, dest, force, state)
     if used_known_urls:
         result.notices.append(
             f"Automated download unavailable — DoD portal blocked access. "
             f"Used last-known-good URL list (last verified {KNOWN_URLS_VERIFIED}). "
-            f"See cwm/downloaders/cmmc.py (KNOWN_URLS) for the full URL list."
+            f"See source-content/cmmc/_known-urls.txt for the full URL list."
         )
     return result
