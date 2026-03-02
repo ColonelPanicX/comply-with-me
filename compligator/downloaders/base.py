@@ -103,3 +103,59 @@ def require_playwright() -> None:
             "Playwright is required but not installed.\n"
             "Run: pip install playwright && playwright install chromium"
         ) from exc
+
+
+def playwright_download_file(
+    url: str,
+    dest: Path,
+    *,
+    force: bool = False,
+    state: Optional["StateFile"] = None,
+) -> tuple[bool, str]:
+    """Download a URL that the server serves as a browser attachment (not inline).
+
+    Some government sites (CISA, FBI) respond to plain HTTP requests with 403 but
+    serve the file correctly when a real browser navigates to it — the response
+    includes Content-Disposition: attachment, which triggers a browser download
+    rather than inline rendering. Playwright's accept_downloads mode catches that
+    event and saves the file.
+
+    Returns (success, message) with the same semantics as download_file().
+    """
+    if not force:
+        if state is not None:
+            if state.needs_adopt(dest):
+                state.adopt(dest, url)
+            if state.is_fresh(dest, url):
+                return True, "skipped"
+        elif dest.exists() and dest.stat().st_size > 0:
+            return True, "skipped"
+
+    require_playwright()
+    from playwright.sync_api import sync_playwright
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
+            ctx = browser.new_context(user_agent=USER_AGENT, accept_downloads=True)
+            page = ctx.new_page()
+            with page.expect_download(timeout=60_000) as dl_info:
+                try:
+                    page.goto(url, timeout=10_000)
+                except Exception:
+                    pass  # Navigation "fails" because the server triggers a download — expected
+            dl = dl_info.value
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dl.save_as(str(dest))
+            browser.close()
+
+        if not dest.exists() or dest.stat().st_size == 0:
+            dest.unlink(missing_ok=True)
+            return False, "downloaded file was empty"
+
+        if state is not None:
+            state.record(dest, url)
+        return True, "downloaded"
+
+    except Exception as exc:  # noqa: BLE001
+        return False, f"playwright download failed: {exc}"
